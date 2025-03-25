@@ -1,0 +1,16 @@
+# ※※※ 以下は環境に合わせて変更してください ※※※
+
+# リージョン設定
+aws_region = "ap-northeast-1"
+
+# 既存VPC ID
+vpc_id = "vpc-xxxxxxxxx"
+
+# VPNを関連付けるプライベートサブネットID
+private_subnet_id = "subnet-xxxxxxxxx"
+
+# EC2に関連付けるキーペア名
+keypair_name = "sample_keypaier"
+
+# EC2に作成するテストユーザー名
+ec2_test_user = "ssh-user"
