@@ -1,6 +1,5 @@
 # awsclientvpn-tf-template
 半分ぐらい自分用ですが、このリポジトリは既存のVPC/Subnet上にAWS Client VPNを実装するためのTerraformテンプレートになります。  
-証明書の作成からACMへの登録まで自動化されています。
 
 # 注意事項
 本リポジトリでのデプロイ手順は自環境で行っています。  
