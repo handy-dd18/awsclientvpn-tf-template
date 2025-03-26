@@ -23,3 +23,8 @@ variable "ec2_test_user" {
   description = "EC2に作成するテストユーザー名"
   type        = string
 }
+
+variable "ec2_test_password" {
+  description = "EC2に作成するテストユーザーのパスワード"
+  type        = string
+}

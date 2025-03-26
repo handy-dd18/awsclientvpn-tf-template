@@ -34,9 +34,9 @@
 
 # 検証環境
 - 検証時の環境バージョンは以下です。
-  - WSL バージョン: 2.1.5.0
-  - カーネル バージョン: 5.15.146.1-2
-  - Windows バージョン: 10.0.19045.4170
+  - WSL バージョン: 2.4.13.0
+  - カーネル バージョン: 5.15.167.4-1
+  - Windows バージョン: 10.0.19045.5608
   - Docker version 24.0.6, build ed223bc
   - aws-vault 7.2.0-Homebrew
 
@@ -44,19 +44,46 @@
 
 
 # 前提条件
-- デプロイに必要な1つのVPCとPrivate Subnetは既に作成されていること。
+- デプロイに必要なVPCとPrivate Subnetは既に作成されていること。
 - 動作確認用のEC2も構築する場合、EC2に関連付けるキーペアも作成されていること。
-- 以下のツール群が既にインストールされていること。
+- 以下のツールが既にインストールされていること。
   - docker([参考URL](https://zenn.dev/thyt_lab/articles/fee07c278fcaa8))
   - aws-vault([参考URL](https://qiita.com/tawara_/items/b993815a1bdc3789a3ff))
     - MFA設定している方は[MFA設定](https://qiita.com/ezaqiita/items/335faf2c122ebd90b6a4)も忘れず
 - AWSのアクセスキー、シークレットアクセスキーを事前に作成され、利用可能な状態になっていること。
+- デプロイ用ユーザーに以下AWSサービスへの権限が付与されていること。
+  - AWS Client VPN
+  - Amazon EC2
+  - Amazon VPC(ReadOnly)
+  - Amazon CloudWatch Logs
+  - AWS ACM
 
 ※Dockerとaws-vaultを使用してコンテナ上でterraformコマンドを実行するようにして、ローカルでのTerraformインストールを不要にしました。<br>
 
 
 # デプロイ手順
-## aws-vault設定
+## aws-vault未インストールの場合　※aws-vaultインストール済みの場合はスキップ可
+本リポジトリでは環境変数でDockerコンテナにAWS認証情報を渡しているため、既にawscliがセットアップされた環境であれば以下の環境変数設定コマンドを実行していただければ、`aws-vault`を利用せずにTerraform実行が可能です。
+
+### 環境変数設定コマンド(PowerShell)
+
+```powershell
+$env:AWS_ACCESS_KEY_ID = aws configure get aws_access_key_id
+$env:AWS_SECRET_ACCESS_KEY = aws configure get aws_secret_access_key
+$env:AWS_SESSION_TOKEN = aws configure get aws_session_token
+$env:AWS_DEFAULT_REGION = aws configure get region
+```
+
+### 環境変数設定コマンド(Bash)
+
+```bash
+export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+export AWS_SESSION_TOKEN=$(aws configure get aws_session_token)
+export AWS_DEFAULT_REGION=$(aws configure get region)
+```
+
+## aws-vault設定　※未インストール手順を実施済みの場合はスキップ可
 最初にAWSの認証情報を登録します。<br>
 [プロファイル名]には自身がわかりやすいプロファイル名を設定してください。
 
@@ -98,7 +125,7 @@ mfa_serial=arn:aws:iam::123456789123:mfa/xxxxxxxx　※MFA設定している人�
 
 
 ## デプロイ実施
-### 事前作業
+### Terraformコード取得
 リポジトリからソースコードを取得します。
 
 ```bash
@@ -106,12 +133,13 @@ $ git clone [Clone URL]
 $ cd awsclientvpn-tf-template
 ```
 
+### AWS認証情報設定　※未インストール手順を実施済みの場合はスキップ可
 デプロイコマンドを実行する前にaws-vaultを呼び出してAWSの一時的な認証情報を取得・設定します。
 
 ```bash
 $ aws-vault exec [プロファイル名]
 
-Enter MFA code for arn:aws:iam::123456789123:mfa/xxxxxxxx: 111111　※MFA設定している人のみ
+Enter MFA code for arn:aws:iam::123456789123:mfa/xxxxxxxx: 111111
 Starting subshell /bin/bash, use `exit` to exit the subshell
 ```
 
@@ -127,7 +155,9 @@ default                  -                        -
 ```
 
 `terraform/terraform.tfvars.example` ファイルをコピーして同階層に `terraform/terraform.tfvars` ファイルを作成します。  
-実行環境に記載内容を編集します。動作確認用EC2を構築する場合は既存のキーペア名を指定します。
+実行環境に記載内容を編集します。  
+動作確認用EC2を構築する場合は既存のキーペア名を指定します。  
+テストユーザー名は変更しなくてもデプロイには影響しません。
 
 ```
 # ※※※ 以下は環境に合わせて変更してください ※※※
@@ -149,8 +179,9 @@ ec2_test_user = "ssh-user"
 ```
 
 > [!Note]
-> 動作確認用EC2を構築しない場合は `ec2.tf` をすべてコメントアウトしてください。キーペア名は変更不要です。
+> 動作確認用EC2を構築しない場合は `ec2.tf` をすべてコメントアウトしてください。
 
+### 証明書作成
 `01_create-certificates.sh`スクリプトを実行してローカルにサーバー証明書とクライアント証明書を生成します。  
 本リポジトリでは`certificates`ディレクトリがローカルマシンとコンテナ間で共有されます。  
 そのため、コンテナを終了しても証明書データは失われません。
@@ -159,7 +190,7 @@ ec2_test_user = "ssh-user"
 $ docker compose run --rm --entrypoint bash terraform /files/scripts/01_create-certificates.sh
 ```
 
-### デプロイ作業
+### デプロイ実行
 Terraformコマンドを順番に実行します。<br>
 
 ```bash
@@ -192,7 +223,7 @@ Do you want to perform these actions?
 エラーなくapplyが成功したらAWSマネジメントコンソールからAWS Client VPNが構築されていることが確認できます。
 
 
-## 接続確認
+### クライアント設定ファイル取得
 AWS Client VPNに接続するにはクライアント設定ファイルの取得と設定が必要になります。
 
 `02_download-vpn-config.sh`スクリプトを実行して、クライアントVPNエンドポイントのクライアント設定ファイルの取得と設定を行います。  
@@ -203,6 +234,7 @@ AWS Client VPNに接続するにはクライアント設定ファイルの取得
 $ docker compose run --rm --entrypoint bash terraform /files/scripts/02_download-vpn-config.sh
 ```
 
+### VPN接続
 VPNツール([AWS Client VPN](https://aws.amazon.com/jp/vpn/client-vpn-download/)等)を利用して構築したクライアントVPNエンドポイントに接続します。
 
 > [!NOTE]
@@ -229,6 +261,7 @@ VPNツール([AWS Client VPN](https://aws.amazon.com/jp/vpn/client-vpn-download/
 > 7. ボタンが`接続解除`になっていればVPNへの接続は成功です。  
 ![](img/07.png)
 
+### (必要に応じて実施)動作確認用EC2への接続確認
 `03_ssh-to-ec2.sh`スクリプトを実行して、VPN経由で動作確認用EC2へのpingテストの実行を行います。  
 SSH接続テストを行う場合は、スクリプトから出力されたSSHコマンドをSSHがインストールされているターミナルで実行します。
 
@@ -244,6 +277,7 @@ VPN接続のpingテスト中...
 VPN接続は正常です。EC2インスタンスに到達可能です。
 ```
 
+### (必要に応じて実施)SSH接続確認
 ローカルでSSHコマンドが利用できる場合は発行された以下コマンドで動作確認用EC2へのSSH接続を行うことができます。  
 異なるEC2へのSSH接続を行う場合はSecurity Groupで22番ポートとVPC CIDRのIPが許可されていることを確認してください。
 
